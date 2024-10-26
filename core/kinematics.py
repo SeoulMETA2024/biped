@@ -24,4 +24,4 @@ class Kinematics:
         sin_theta2 = np.sqrt(1-cos_theta2**2)
         theta2 = np.arctan2(sin_theta2,cos_theta2)
         theta1 = np.arctan2(y,x) - np.arctan2(self.L1 + self.L2*cos_theta2,self.L2*sin_theta2) 
-        return
+        return (theta1, theta2)
