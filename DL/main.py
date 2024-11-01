@@ -20,8 +20,6 @@ import pybullet as p
 import pybullet_data
 
 
-#하이퍼파라미터 설정
-
 EPISODES = 3500
 
 EPS = 1.0
@@ -164,9 +162,8 @@ class Bot:
     
 
 
-# env = gym.make("BipedalWalker-v3")
-# state_size = env.observation_space.shape[0]
-# action_size = env.action_space.n
+state_size = 
+action_size = 
 
 agent = Agent(state_size, action_size)
 bot = Bot('...')
@@ -185,7 +182,7 @@ for e in range(EPISODES):
 
         action = agent.act(state)
 
-        #state form recommended
+        #observations required
         #관절 각속도 및 각
         #몸체 각속도 및 각
         #접촉력 - 보류
@@ -207,4 +204,3 @@ for e in range(EPISODES):
             break
 
         agent.train(BATCH_SIZE)
-# env.close()
