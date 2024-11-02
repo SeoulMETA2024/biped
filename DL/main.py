@@ -56,7 +56,7 @@ class DQN(nn.Module):
   def forward(self, x):
     x = torch.relu(self.fc1(x))
     x = torch.relu(self.fc2(x))
-    x = torch.relu(self.fc3(x))
+    x = self.fc3(x)
 
     return x
 
@@ -87,7 +87,8 @@ class Agent(nn.Module,ReplayMemory,DQN):
       self.model = DQN(state_size, action_size)
       self.target_model = DQN(state_size, action_size)
 
-      self.target_model.load_state_dict(self.model.state_dict)
+      self.target_model.load_state_dict(self.model.state_dict())
+      self.memory = ReplayMemory(capacity=100000)
 
       self.optimizer = optim.Adam(self.model.parameters(), lr=LEARNING_RATE)
 
@@ -123,8 +124,12 @@ class Agent(nn.Module,ReplayMemory,DQN):
         loss.backward()
         self.optimizer.step()
 
+        global EPS
         if EPS > EPS_MIN:
             EPS *= EPS_DECAY
+
+    def update_target_model(self):
+      self.target_model.load_state_dict(self.model.state_dict())
 
 
   
@@ -267,7 +272,7 @@ bot = Bot('...') #urdf 파일 이름 넣기
 
 for e in range(EPISODES):
 
-    state = np.reshape(state, [1, state_size])
+    state = np.zeros(state_size)
     total_reward = 0
     done = False
 

@@ -1,10 +1,10 @@
-### Update: 11/2 01:52
+### Update: 11/3 00:26
 
-- implement Reward function
+- implement Reward function -done
 
-- implement bot.step
+- implement bot.step -done
 
-- determine observation size
+- determine observation size -done
 
 - make dummy urdf
 
