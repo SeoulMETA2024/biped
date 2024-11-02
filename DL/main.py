@@ -16,10 +16,10 @@ from collections import namedtuple
 from collections import deque
 import random
 import math
+import toml
 
 import pybullet as p
 import pybullet_data
-
 
 EPISODES = 3500
 
@@ -33,8 +33,12 @@ BATCH_SIZE = 64
 
 TARGET_REWARD = 50 #수정?
 
+
 TARGET_HEIGHT = 20 #수정필요
 
+MOTOR_FORCE = 300
+
+#보상함수 가중치
 M_W = 1
 H_W = 0.3
 T_W = 0.3
@@ -137,7 +141,11 @@ class Bot:
 
     pass
 
-  def getJointState(self):
+  def getJointState(self) -> list:
+    '''
+    get joint angle, velocity, torchu
+    '''
+
     num_joints = p.getNumJoints(self.actor)
 
     Joints = []
@@ -162,7 +170,11 @@ class Bot:
     return Joints, Joints_raw
 
 
-  def getBodyState(self):
+  def getBodyState(self) -> list:
+    '''
+    get body state:
+    [vx, vy, vz, x, y, z, qx, qy, qz, qw, wx, wy, wz] 
+    '''
 
     Body = []
   
@@ -180,9 +192,9 @@ class Bot:
     Body.extend(orientation)   
     Body.extend(angular_velocity) 
 
-    return Body #[vx, vy, vz, x, y, z, qx, qy, qz, qw, wx, wy, wz] 
+    return Body 
         
-  def getReward(self,state,joint_raw):
+  def getReward(self,state:tuple,joint_raw:list) -> float:
       '''
       calculate reward due to the state of the actor.
       '''
@@ -203,6 +215,9 @@ class Bot:
   
   
   def step(self,action:tuple):
+     '''
+     apply thetas to actor
+     '''
      #action으로 받아온 theta 적용하기
      self.setJoint(0,action[0])
      self.setJoint(1,action[1])
@@ -224,13 +239,17 @@ class Bot:
 
      return new_state, reward
   
-  def setJoint(self,jointIdx,target):
+  def setJoint(self,jointIdx:int,target:float) -> None:
+     
+     '''
+     set actor joint angle
+     '''
      p.setJointMotorControl2(
      bodyIndex=self.actor,             
      jointIndex=jointIdx,         
      controlMode=p.POSITION_CONTROL,    
      targetPosition=math.radians(target)    
-     force=500    
+     force=300    
      )     
 
      pass                 

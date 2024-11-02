@@ -1,0 +1,19 @@
+EPISODES = 3500
+
+EPS = 1.0
+EPS_DECAY = 0.995
+EPS_MIN = 0.01
+
+GAMMA = 0.8
+LEARNING_RATE = 0.01
+BATCH_SIZE = 64
+
+TARGET_REWARD = 50 #수정?
+
+TARGET_HEIGHT = 20 #수정필요
+
+#보상함수 가중치
+M_W = 1
+H_W = 0.3
+T_W = 0.3
+E_W = 0.3
