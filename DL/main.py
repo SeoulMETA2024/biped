@@ -240,14 +240,13 @@ class Bot:
     
 
 
-state_size = 
+state_size = 31
 action_size = 6
 
 agent = Agent(state_size, action_size)
-bot = Bot('...')
+bot = Bot('...') #urdf 파일 이름 넣기
 
 for e in range(EPISODES):
-    # state = env.reset()
 
     state = np.reshape(state, [1, state_size])
     total_reward = 0
