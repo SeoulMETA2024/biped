@@ -15,6 +15,7 @@ import torch.nn.functional as F
 from collections import namedtuple
 from collections import deque
 import random
+import math
 
 import pybullet as p
 import pybullet_data
@@ -29,6 +30,16 @@ EPS_MIN = 0.01
 GAMMA = 0.8
 LEARNING_RATE = 0.01
 BATCH_SIZE = 64
+
+TARGET_REWARD = 50 #수정?
+
+TARGET_HEIGHT = 20 #수정필요
+
+M_W = 1
+H_W = 0.3
+T_W = 0.3
+E_W = 0.3
+
 
 class DQN(nn.Module):
   def __init__(self, state_size, action_size):
@@ -111,59 +122,126 @@ class Agent(nn.Module,ReplayMemory,DQN):
         if EPS > EPS_MIN:
             EPS *= EPS_DECAY
 
-    def getReward(body_pos:tuple,body_velocity:tuple,joint:namedtuple):
-         '''
-         calculate reward due to the state of actuator.
-         '''
-         
-         return reward
+
   
 
 class Bot:
-  def __init__(self,botID,filename):
-    self.botID = botID
+  def __init__(self,filename):
+
 
     p.connect(p.GUI)
     p.setGravity(0, 0, -9.81)
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
-    plane_id = p.loadURDF("plane.urdf")
-    robot_id = p.loadURDF(filename, basePosition=[0, 0, 1])
+    self.plane = p.loadURDF("plane.urdf")
+    self.actor = p.loadURDF(filename, basePosition=[0, 0, 1])
 
     pass
 
   def getJointState(self):
-    num_joints = p.getNumJoints(self.botID)
+    num_joints = p.getNumJoints(self.actor)
 
     Joints = []
+    Joints_raw = []
 
-    JointState = namedtuple('JointState',['angle', 'velocity'])
+    # JointState = namedtuple('JointState',['angle', 'velocity'])
 
     for joint_idx in range(num_joints):
-      angle = p.getJointState[0]
-      velocity = p.getJointState[1]
+      data = p.getJointState
+      Joints_raw.append(data)
 
-      Joints.append(JointState(angle=angle,velocity=velocity))
+      angle = data[0]
+      velocity = data[1]
+      torque = data[3]
+
+      # Joints.append(JointState(angle=angle,velocity=velocity))
+
+      Joints.append(angle)
+      Joints.append(velocity)
+      Joints.append(torque)
     
-    return Joints
+    return Joints, Joints_raw
 
 
   def getBodyState(self):
-    position, orientation = p.getBasePositionAndOrientation(self.botID)
-    linear_velocity, angular_velocity = p.getBaseVelocity(self.botID)
-    BodyState = namedtuple('BodyState',['position','angle','linear_velocity','angular_velocity'])
 
-    Body = BodyState(position=position,angle=orientation,linear_velocity=linear_velocity,angular_velocity=angular_velocity)
+    Body = []
+  
+    position, orientation = p.getBasePositionAndOrientation(self.actor)
+
+
+
+    linear_velocity, angular_velocity = p.getBaseVelocity(self.actor)
+    # BodyState = namedtuple('BodyState',['position','angle','linear_velocity','angular_velocity'])
+
+    # Body = BodyState(position=position,angle=orientation,linear_velocity=linear_velocity,angular_velocity=angular_velocity)
+
+    Body.extend(linear_velocity) 
+    Body.extend(position)     
+    Body.extend(orientation)   
+    Body.extend(angular_velocity) 
+
+    return Body #[vx, vy, vz, x, y, z, qx, qy, qz, qw, wx, wy, wz] 
+        
+  def getReward(self,state,joint_raw):
+      '''
+      calculate reward due to the state of the actor.
+      '''
+      moveReward = state[0]
+
+
+      heightPenalty = abs(state[5] - TARGET_HEIGHT)
+
+      tilt = (p.getEulerFromQuaternion(state[6]), p.getEulerFromQuaternion(state[7]))
+
+      tiltPenalty = abs(tilt[0]) + abs(tilt[1])
+
+      energy_penalty = sum(abs(js[1] * js[3]) for js in joint_raw)
+      
+      reward = M_W*moveReward - T_W*tiltPenalty - H_W*heightPenalty - E_W*energy_penalty
+
+      return reward
+  
+  
+  def step(self,action:tuple):
+     #action으로 받아온 theta 적용하기
+     self.setJoint(0,action[0])
+     self.setJoint(1,action[1])
+     self.setJoint(2,action[2])
+     self.setJoint(3,action[3])
+     self.setJoint(4,action[4])
+     self.setJoint(5,action[5])     
+     
+     p.stepSimulation()
+
+     bodyState = self.getBodyState()
+     jointState, joint_raw = self.getJointState()
+
+     new_state = (*bodyState, *jointState)
+
+     reward = self.getReward(new_state,joint_raw)
+
+     
+
+     return new_state, reward
+  
+  def setJoint(self,jointIdx,target):
+     p.setJointMotorControl2(
+     bodyIndex=self.actor,             
+     jointIndex=jointIdx,         
+     controlMode=p.POSITION_CONTROL,    
+     targetPosition=math.radians(target)    
+     force=500    
+     )     
+
+     pass                 
+
   
 
-    return Body
-  
-  def step(self,action):
-     return
     
 
 
 state_size = 
-action_size = 
+action_size = 6
 
 agent = Agent(state_size, action_size)
 bot = Bot('...')
@@ -177,26 +255,29 @@ for e in range(EPISODES):
 
     while not done:
         bodyState = bot.getBodyState()
-        jointState = bot.getJointState()
+        jointState, _ = bot.getJointState()
         state = (*bodyState,*jointState)
 
-        action = agent.act(state)
+        action = agent.act(*state)
 
         #observations required
-        #관절 각속도 및 각
-        #몸체 각속도 및 각
+        #관절 각속도 및 각 - ok
+        #몸체 각속도 및 각 - ok
         #접촉력 - 보류
         #이전 action 피드백
 
-        next_state, reward, done = bot.step(action)
+        next_state, reward = bot.step(action)
         next_state = np.reshape(next_state, [1, state_size])
 
-        #보상함수
-        reward = agent.getReward(state)
+        
+        reward = bot.getReward(next_state)
 
         agent.memory.push((state, action, reward, next_state, done))
         state = next_state
         total_reward += reward
+
+        if total_reward >= TARGET_REWARD:
+           done = True
 
         if done:
             agent.update_target_model()
