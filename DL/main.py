@@ -31,18 +31,18 @@ GAMMA = 0.8
 LEARNING_RATE = 0.01
 BATCH_SIZE = 64
 
-TARGET_REWARD = 50 #수정?
+TARGET_REWARD = 1 #수정?
 
 
-TARGET_HEIGHT = 20 #수정필요
+TARGET_HEIGHT = 1 #수정필요
 
 MOTOR_FORCE = 300
 
-#보상함수 가중치
-M_W = 10
-H_W = 0.3
-T_W = 0.3
-E_W = 0.3
+#보상함수 가중치 -> 수정
+M_W = 1000000
+H_W = 0.03
+T_W = 0.03
+E_W = 0.03
 
 
 class DQN(nn.Module):
@@ -107,30 +107,30 @@ class Agent(ReplayMemory, DQN):
      
             return tuple(q_values[0].cpu().numpy())
 
-def train(self, batch_size):
-    if len(self.memory) < batch_size:
-        return
-    
-    minibatch = self.memory.sample(batch_size)
+    def train(self, batch_size):
+        if len(self.memory) < batch_size:
+            return
+        
+        minibatch = self.memory.sample(batch_size)
 
-    states = torch.FloatTensor(np.array([t[0] for t in minibatch]))  # Numpy array로 변환
-    actions = torch.LongTensor(np.array([t[1] for t in minibatch]).astype(int))  # LongTensor로 변환
-    rewards = torch.FloatTensor(np.array([t[2] for t in minibatch]))  # Numpy array로 변환
-    next_states = torch.FloatTensor(np.array([t[3] for t in minibatch]))  # Numpy array로 변환
-    dones = torch.FloatTensor(np.array([t[4] for t in minibatch]))  # Numpy array로 변환
+        states = torch.FloatTensor(np.array([t[0] for t in minibatch]))  # Numpy array로 변환
+        actions = torch.LongTensor(np.array([t[1] for t in minibatch]).astype(int))  # LongTensor로 변환
+        rewards = torch.FloatTensor(np.array([t[2] for t in minibatch]))  # Numpy array로 변환
+        next_states = torch.FloatTensor(np.array([t[3] for t in minibatch]))  # Numpy array로 변환
+        dones = torch.FloatTensor(np.array([t[4] for t in minibatch]))  # Numpy array로 변환
 
-    q_values = self.model(states).gather(1, actions.unsqueeze(1)).squeeze(1)  # Unsqueeze하여 차원 맞춤
-    next_q_values = self.model(next_states).max(1)[0]  # 인덱스 필요 없음
-    targets = rewards + (GAMMA * next_q_values * (1 - dones))
+        q_values = self.model(states).gather(1, actions.unsqueeze(1)).squeeze(1)  # Unsqueeze하여 차원 맞춤
+        next_q_values = self.model(next_states).max(1)[0]  # 인덱스 필요 없음
+        targets = rewards + (GAMMA * next_q_values * (1 - dones))
 
-    loss = nn.MSELoss()(q_values, targets)
-    self.optimizer.zero_grad()
-    loss.backward()
-    self.optimizer.step()
+        loss = nn.MSELoss()(q_values, targets)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
 
-    global EPS
-    if EPS > EPS_MIN:
-        EPS *= EPS_DECAY
+        global EPS
+        if EPS > EPS_MIN:
+            EPS *= EPS_DECAY
 
     def update_target_model(self):
       self.target_model.load_state_dict(self.model.state_dict())
@@ -143,7 +143,7 @@ class Bot:
 
 
     p.connect(p.GUI)
-    p.setGravity(0, 0, 0)
+    p.setGravity(0, 0, -9.8)
     p.setTimeStep(1/200)
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
     self.plane = p.loadURDF("plane.urdf")
@@ -261,12 +261,19 @@ class Bot:
 
 
      reward = self.getReward(new_state,joint_raw)
+    
+     done = False
+
+     if reward >= TARGET_REWARD:
+       done = True
+
+      
 
      
 
      
 
-     return new_state, reward
+     return new_state, reward, done
   
   def setJoint(self,jointIdx:int,target:float) -> None:
      
@@ -316,7 +323,7 @@ for e in range(EPISODES):
         #접촉력 - 보류
         #이전 action 피드백
 
-        next_state, reward = bot.step(action)
+        next_state, reward,done = bot.step(action)
 
         next_state = np.reshape(next_state, [1, state_size])
 
@@ -327,8 +334,7 @@ for e in range(EPISODES):
         state = next_state
         total_reward += reward
 
-        if total_reward >= TARGET_REWARD:
-           done = True
+
 
         if done:
             agent.update_target_model()
