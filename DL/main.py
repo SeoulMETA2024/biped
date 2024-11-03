@@ -16,7 +16,7 @@ from collections import namedtuple
 from collections import deque
 import random
 import math
-import toml
+
 
 import pybullet as p
 import pybullet_data
@@ -39,7 +39,7 @@ TARGET_HEIGHT = 20 #수정필요
 MOTOR_FORCE = 300
 
 #보상함수 가중치
-M_W = 1
+M_W = 10
 H_W = 0.3
 T_W = 0.3
 E_W = 0.3
@@ -78,55 +78,59 @@ class ReplayMemory:
   def __len__(self):
     return len(self.memory)
 
-class Agent(nn.Module,ReplayMemory,DQN):
-    def __init__(self,state_size,action_size):
-      super(DQN, self).__init__()
-      self.state_size = state_size
-      self.action_size = action_size
+class Agent(ReplayMemory, DQN):
+    def __init__(self, state_size, action_size):
+        super(DQN, self).__init__()
+        self.state_size = state_size
+        self.action_size = action_size
 
-      self.model = DQN(state_size, action_size)
-      self.target_model = DQN(state_size, action_size)
+        self.model = DQN(state_size, action_size)
+        self.target_model = DQN(state_size, action_size)
 
-      self.target_model.load_state_dict(self.model.state_dict())
-      self.memory = ReplayMemory(capacity=100000)
+        self.target_model.load_state_dict(self.model.state_dict())
+        self.memory = ReplayMemory(capacity=100000)
 
-      self.optimizer = optim.Adam(self.model.parameters(), lr=LEARNING_RATE)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=LEARNING_RATE)
 
     def act(self, state):
-      '''
-      implement epsilon-greedy
-      '''
-      if np.random.rand() <= EPS:
-          return random.randrange(self.action_size)
-      state = torch.FloatTensor(state).unsqueeze(0)
-      with torch.no_grad():
-          q_values = self.model(state)
-      return np.argmax(q_values.cpu().numpy())
-
-    def train(self, batch_size):
-        if len(self.memory) < batch_size:
-            return
+        '''
+        epsilon-greedy
+        '''
+        if np.random.rand() <= EPS:
         
-        minibatch = self.memory.sample(batch_size)
+            return tuple(random.uniform(-1, 1) for _ in range(self.action_size))
+        else:
+           
+            state = torch.FloatTensor(state).unsqueeze(0)
+            with torch.no_grad():
+                q_values = self.model(state)
+     
+            return tuple(q_values[0].cpu().numpy())
 
-        states = torch.FloatTensor(t[0] for t in minibatch)
-        action = torch.FloatTensor(t[1] for t in minibatch)
-        reward = torch.FloatTensor(t[2] for t in minibatch)
-        next_state = torch.FloatTensor(t[3] for t in minibatch)
-        dones = torch.FloatTensor(t[4] for t in minibatch)
+def train(self, batch_size):
+    if len(self.memory) < batch_size:
+        return
+    
+    minibatch = self.memory.sample(batch_size)
 
-        q_values = self.model(states).gather(1,action).squeeze(1)
-        next_q_values = self.model(next_state).gather(1, action).max(1)[0]
-        targets = reward + (GAMMA * next_q_values * (1 - dones))
+    states = torch.FloatTensor(np.array([t[0] for t in minibatch]))  # Numpy array로 변환
+    actions = torch.LongTensor(np.array([t[1] for t in minibatch]).astype(int))  # LongTensor로 변환
+    rewards = torch.FloatTensor(np.array([t[2] for t in minibatch]))  # Numpy array로 변환
+    next_states = torch.FloatTensor(np.array([t[3] for t in minibatch]))  # Numpy array로 변환
+    dones = torch.FloatTensor(np.array([t[4] for t in minibatch]))  # Numpy array로 변환
 
-        loss = nn.MSELoss()(q_values, targets)
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
+    q_values = self.model(states).gather(1, actions.unsqueeze(1)).squeeze(1)  # Unsqueeze하여 차원 맞춤
+    next_q_values = self.model(next_states).max(1)[0]  # 인덱스 필요 없음
+    targets = rewards + (GAMMA * next_q_values * (1 - dones))
 
-        global EPS
-        if EPS > EPS_MIN:
-            EPS *= EPS_DECAY
+    loss = nn.MSELoss()(q_values, targets)
+    self.optimizer.zero_grad()
+    loss.backward()
+    self.optimizer.step()
+
+    global EPS
+    if EPS > EPS_MIN:
+        EPS *= EPS_DECAY
 
     def update_target_model(self):
       self.target_model.load_state_dict(self.model.state_dict())
@@ -139,7 +143,8 @@ class Bot:
 
 
     p.connect(p.GUI)
-    p.setGravity(0, 0, -9.81)
+    p.setGravity(0, 0, 0)
+    p.setTimeStep(1/200)
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
     self.plane = p.loadURDF("plane.urdf")
     self.actor = p.loadURDF(filename, basePosition=[0, 0, 1])
@@ -159,7 +164,7 @@ class Bot:
     # JointState = namedtuple('JointState',['angle', 'velocity'])
 
     for joint_idx in range(num_joints):
-      data = p.getJointState
+      data = p.getJointState(self.actor,joint_idx)
       Joints_raw.append(data)
 
       angle = data[0]
@@ -204,17 +209,25 @@ class Bot:
       calculate reward due to the state of the actor.
       '''
       moveReward = state[0]
+  
 
 
       heightPenalty = abs(state[5] - TARGET_HEIGHT)
 
-      tilt = (p.getEulerFromQuaternion(state[6]), p.getEulerFromQuaternion(state[7]))
 
-      tiltPenalty = abs(tilt[0]) + abs(tilt[1])
+
+      # tilt = (p.getEulerFromQuaternion(state[6]), p.getEulerFromQuaternion(state[7]))
+
+  
+      # tiltPenalty = abs(tilt[0]) + abs(tilt[1])
+
 
       energy_penalty = sum(abs(js[1] * js[3]) for js in joint_raw)
+
       
-      reward = M_W*moveReward - T_W*tiltPenalty - H_W*heightPenalty - E_W*energy_penalty
+      reward = M_W*moveReward - H_W*heightPenalty - E_W*energy_penalty
+
+
 
       return reward
   
@@ -224,21 +237,32 @@ class Bot:
      apply thetas to actor
      '''
      #action으로 받아온 theta 적용하기
+     
      self.setJoint(0,action[0])
      self.setJoint(1,action[1])
      self.setJoint(2,action[2])
      self.setJoint(3,action[3])
      self.setJoint(4,action[4])
-     self.setJoint(5,action[5])     
+     self.setJoint(5,action[5])  
+
+      
      
      p.stepSimulation()
+
+     
 
      bodyState = self.getBodyState()
      jointState, joint_raw = self.getJointState()
 
+     
+
      new_state = (*bodyState, *jointState)
 
+
+
      reward = self.getReward(new_state,joint_raw)
+
+     
 
      
 
@@ -253,7 +277,7 @@ class Bot:
      bodyIndex=self.actor,             
      jointIndex=jointIdx,         
      controlMode=p.POSITION_CONTROL,    
-     targetPosition=math.radians(target)    
+     targetPosition=math.radians(target),  
      force=300    
      )     
 
@@ -268,7 +292,7 @@ state_size = 31
 action_size = 6
 
 agent = Agent(state_size, action_size)
-bot = Bot('...') #urdf 파일 이름 넣기
+bot = Bot('dummy.urdf') #urdf 파일 이름 넣기
 
 for e in range(EPISODES):
 
@@ -277,11 +301,14 @@ for e in range(EPISODES):
     done = False
 
     while not done:
+        
+
         bodyState = bot.getBodyState()
         jointState, _ = bot.getJointState()
         state = (*bodyState,*jointState)
 
-        action = agent.act(*state)
+        action = agent.act(state)
+
 
         #observations required
         #관절 각속도 및 각 - ok
@@ -290,10 +317,11 @@ for e in range(EPISODES):
         #이전 action 피드백
 
         next_state, reward = bot.step(action)
+
         next_state = np.reshape(next_state, [1, state_size])
 
         
-        reward = bot.getReward(next_state)
+   
 
         agent.memory.push((state, action, reward, next_state, done))
         state = next_state
@@ -306,5 +334,7 @@ for e in range(EPISODES):
             agent.update_target_model()
             print(f"Episode: {e+1}/{EPISODES}, Score: {total_reward}")
             break
+        
+        print('session_reward =',reward)
 
-        agent.train(BATCH_SIZE)
+        agent.model.train()
